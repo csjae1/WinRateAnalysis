@@ -1,0 +1,246 @@
+---
+title: "MLB Win Rate Prediction"
+author: "sandeul"
+date: "2018/4/12"
+output1: html_document
+---
+
+
+```{r setup, include=FALSE}
+library(data.table)
+library(corrplot)
+library(dplyr)
+library(car)
+library(gvlma)
+library(ggplot2)
+library(usdm)
+library(PerformanceAnalytics)
+library(lm.beta)
+library(caret)
+
+pitchingDF <- fread(input = "data/pitching.txt",
+                    sep = ",",
+                    header = TRUE)
+
+battingDF <- fread(input = "data/batting.txt",
+                   sep = ",",
+                   header = TRUE)
+str(pitchingDF)
+
+pitchingDF <- pitchingDF[,-c(1,4,5,6,7,12,36)]
+
+TeamDF <- merge(battingDF, pitchingDF, by = c("Year", "Tm"))
+TeamDF <- TeamDF[Year < 2018 ,]
+
+```
+
+
+#**EDA(Exploratory data analysis)**
+### 1.Variables
+```{r}
+colnames(TeamDF)
+```
+
+### 2. Sample Size
+```{r}
+nrow(TeamDF)
+```
+
+### 3. Dependent Variable(y)
+```{r}
+summary(TeamDF$winrate)
+boxplot(TeamDF$winrate)
+```
+
+
+### 4. Independent Variable(x)
+```{r}
+str(TeamDF)
+colSums(is.na(TeamDF))
+```
+
+
+### 5. Train / Test
+```{r}
+# train 70% / test 30%
+set.seed(9943)
+inTrain <- createDataPartition(y=TeamDF$winrate, p=0.7, list=FALSE)
+trainDF <- TeamDF[inTrain , ]
+testDF  <- TeamDF[-inTrain , ]
+```
+
+
+# Correlation Analysis
+```{r}
+analysis.pit <- trainDF[,c("winrate", "ERA", "SHO", "SV", "IP", "Hpit", "Rpit", "ER", "HRpit", "BBpit", "IBBpit", "SOpit", "HBPpit", "BK", "WP", "BF", "WHIP", "H9", "HR9", "BB9", "SO9", "SO/W")]
+
+analysis.bat <- trainDF[,c("winrate", "#Bat", "R/G", "G", "PA", "AB", "Rbat", "Hbat", "2Bbat", "3Bbat", "HRbat", "RBI", "SB", "CS", "BBbat", "SObat", "BAbat", "OBP", "SLG", "OPS", "TB", "GDP", "HBPbat", "SH", "SF", "IBBbat", "LOB")]
+
+
+ chart.Correlation(analysis.pit, histogram=TRUE, pch=4)
+ chart.Correlation(analysis.bat, histogram=TRUE, pch=4)
+
+```
+
+
+#### %Emergency Situation%
+```{r}
+TeamDF[TeamDF$G < 160 , Year]
+divideG <- function(args) {
+  return(args/TeamDF$G)
+}
+
+values <- c("PA", "AB", "Rbat", "Hbat", "2Bbat", "3Bbat", "HRbat", "RBI", "SB", "CS", "BBbat", "SObat", "HBPbat", "TB", "SH", "SF", "IBBpit", "CG", "SHO", "SV", "IP", "Hpit", "Rpit", "ER", "HRpit", "BBpit", "IBBpit", "SOpit", "HBPpit", "BK", "WP", "BF", "GDP")
+for (i in values) {
+  TeamDF[,i] <- divideG(TeamDF[,i, with = FALSE])
+}
+
+```
+
+
+```{r include=FALSE}
+trainDF <- TeamDF[inTrain , ]
+testDF  <- TeamDF[-inTrain , ]
+```
+
+
+```{r}
+analysis.pit <- trainDF[,c("winrate", "ERA", "SHO", "SV", "IP", "Hpit", "Rpit", "ER", "HRpit", "BBpit", "IBBpit", "SOpit", "HBPpit", "BK", "WP", "BF", "WHIP", "H9", "HR9", "BB9", "SO9", "SO/W")]
+
+analysis.bat <- trainDF[,c("winrate", "#Bat", "R/G", "G", "PA", "AB", "Rbat", "Hbat", "2Bbat", "3Bbat", "HRbat", "RBI", "SB", "CS", "BBbat", "SObat", "BAbat", "OBP", "SLG", "OPS", "TB", "GDP", "HBPbat", "SH", "SF", "IBBbat", "LOB")]
+
+ chart.Correlation(analysis.pit, histogram=TRUE, pch=4)
+ chart.Correlation(analysis.bat, histogram=TRUE, pch=4)
+
+```
+
+
+```{r}
+# Batter Data
+corrplot.mixed(cor(analysis.pit), p.mat = cor(analysis.pit), sig.level = 0.5, tl.pos = "lt", tl.col = "black")
+# R/G, Rbat, RBI, SLG, OPS, TB, Hbat, PA, BAbat, BBbat, HRbat, 2Bbat, AB, SF, CS, SObat, SH > 0.5
+
+
+# Pitcher Data
+corrplot.mixed(cor(analysis.bat), p.mat = cor(analysis.bat), sig.level = 0.5, tl.pos = "lt", tl.col = "black")
+# ERA, Rpit, ER, Hpit, HRpit, BBpit, SOpit, SO9, BF, H9, SHO, HBPpit, HR9, BB9, SO/W, IP >0.5
+
+
+# Variable Selection
+analysis.bat <- trainDF[,c("winrate", "#Bat",  "3Bbat", "SB",  "OBP", "GDP", "HBPbat", "IBBbat", "LOB")]
+analysis.pit <- trainDF[,c("winrate", "SV", "IBBpit", "BK", "WP", "WHIP")]
+
+```
+
+# **Linear regression**
+
+```{r}
+# Collective Data
+analysis2 <- cbind(analysis.bat, analysis.pit[,-1])
+# Multiple Regression Analysis
+lm.result <- lm(winrate~ .,data =  analysis2)
+# Analysis Result
+summary(lm.result)
+
+```
+
+### 1. Selecting Independent Variable
+```{r}
+
+# Removing meaningless data ( WP, 3Bbat, HBPbat, BK,  IBBpit)
+analysis2 <- analysis2[,c("winrate", "SV", "WHIP", "#Bat", "SB",  "OBP", "GDP", "IBBbat", "LOB")]
+
+lm.result <- lm(winrate~ .,data =  analysis2)
+summary(lm.result)
+
+
+# Stepwise variable selection
+step(lm.result, direction = "both")
+
+lm.result <-  lm(formula = winrate ~ SV + WHIP + `#Bat` + SB + OBP + GDP + IBBbat + LOB, data = analysis2)
+
+# No change
+
+```
+
+### 2. Multicollinearity
+
+```{r}
+car::vif(lm.result)
+```
+
+### 3. Residual Analysis
+```{r}
+gvlma.result <- gvlma(lm.result)
+summary(gvlma.result)
+par(mfrow = c(2,2))
+plot(lm.result)
+```
+
+### 4. Final Model
+```{r}
+beta.result <-lm.beta(lm.result)
+beta.result$coefficients %>% abs() %>% sort() %>% round(digits = 6)
+
+# LOB, IBBbat, `#Bat`, SB, GDP 제거
+lm.result <-  lm(formula = winrate ~ SV + WHIP  + OBP, data = analysis2)
+summary(lm.result)
+
+beta.result <-lm.beta(lm.result)
+beta.result$coefficients %>% abs() %>% sort() %>% round(digits = 6)
+
+chart.Correlation(lm.result$model, histogram=TRUE, pch=4)
+
+```
+
+### 5. Final Model Residual Test
+```{r}
+gvlma.result <- gvlma(lm.result)
+summary(gvlma.result)
+par(mfrow = c(2,2))
+plot(lm.result)
+```
+
+# **Predictive Model**
+
+```{r}
+# Final Model
+finalModel <- lm(formula = winrate ~ SV + WHIP + OBP, data = analysis2)
+
+# prediction test
+pred <- predict(finalModel, 
+                newdata = testDF,
+                interval = "predict")
+pred <- as.data.table(pred)
+
+# predicted result
+pred.final <- pred
+test.final <- testDF[, winrate]
+
+pred.final$winrate <- test.final
+
+pred.final$result <- ifelse((pred.final$lwr <= pred.final$winrate) & (pred.final$winrate <= pred.final$upr), 1, 0 )
+pred.final
+table(pred.final$result)
+```
+
+# **Result** 
+
+## winrate =  0.20574 + 0.25852&lowast;SV - 0.50251&lowast;WHIP + 2.80361&lowast;OBP
+</br>
+```{r}
+```
+## Standarized regression coefficient
+```{r}
+lm.beta::lm.beta(lm.result)
+```
+
+
+* SV   : Save  
+* WHIP : Walks hits per inning pitched  
+* OBP  : On base percentage
+```{r}
+```
+## Predictive Rate : (419 / 439) &lowast; 100 = 95.4%   
+## Model Prediction resulted in a high rate 95.4%.  
+</br></br>
