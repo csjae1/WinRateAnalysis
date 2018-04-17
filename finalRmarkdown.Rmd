@@ -117,12 +117,12 @@ analysis.bat <- trainDF[,c("winrate", "#Bat", "R/G", "G", "PA", "AB", "Rbat", "H
 
 ```{r}
 # Batter Data
-corrplot.mixed(cor(analysis.pit), p.mat = cor(analysis.pit), sig.level = 0.5, tl.pos = "lt", tl.col = "black")
+corrplot.mixed(cor(analysis.pit), p.mat = abs(cor(analysis.pit[,-1])), sig.level = 0.5, tl.pos = "lt", tl.col = "black")
 # R/G, Rbat, RBI, SLG, OPS, TB, Hbat, PA, BAbat, BBbat, HRbat, 2Bbat, AB, SF, CS, SObat, SH > 0.5
 
 
 # Pitcher Data
-corrplot.mixed(cor(analysis.bat), p.mat = cor(analysis.bat), sig.level = 0.5, tl.pos = "lt", tl.col = "black")
+corrplot.mixed(cor(analysis.bat), p.mat = abs(cor(analysis.bat[,-1])), sig.level = 0.5, tl.pos = "lt", tl.col = "black")
 # ERA, Rpit, ER, Hpit, HRpit, BBpit, SOpit, SO9, BF, H9, SHO, HBPpit, HR9, BB9, SO/W, IP >0.5
 
 
